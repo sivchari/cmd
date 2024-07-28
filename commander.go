@@ -1,13 +1,15 @@
 package commander
 
 import (
+	"bytes"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"sort"
+
+	"github.com/spf13/pflag"
 )
 
 type Manage struct {
@@ -59,7 +61,7 @@ type Commander interface {
 	Name() string
 	Short() string
 	Long() string
-	SetFlags(f *flag.FlagSet)
+	SetFlags(f *pflag.FlagSet)
 	Run(ctx context.Context) error
 }
 
@@ -75,6 +77,76 @@ func (c *CommandManager) Register(cmd Commander) {
 		c.commands = make(map[string]Command)
 	}
 	c.commands[cmd.Name()] = Command{Commander: cmd}
+}
+
+var (
+	ErrNoCommand             = errors.New("No command provided")
+	ErrCommandNotImplemented = errors.New("Command not implemented")
+	ErrDisableHelp           = errors.New("Help command is disabled")
+)
+
+func (c *CommandManager) Run(ctx context.Context) error {
+	args := os.Args[1:]
+
+	if len(args) == 0 {
+		return ErrNoCommand
+	}
+
+	if args[0] == "help" {
+		if !c.help {
+			return ErrDisableHelp
+		}
+		c.printHelp(args[1:])
+		return nil
+	}
+
+	cmd, ok := c.commands[args[0]]
+	if !ok {
+		return ErrCommandNotImplemented
+	}
+
+	pos, sub := cmd.search(args[1:])
+	if sub != nil {
+		cmd = *sub
+		pos += 1
+	}
+
+	f := pflag.NewFlagSet(cmd.Name(), pflag.ExitOnError)
+	cmd.SetFlags(f)
+
+	if err := f.Parse(args[pos:]); err != nil {
+		return err
+	}
+
+	if err := cmd.Run(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+const usage = `
+Usage: %s <command> [arguments]
+
+Subcommands:
+%s
+Flags:
+%s
+Use "%s help <command>" for more information about a command.
+`
+
+func (c *CommandManager) printHelp(args []string) {
+	cmd, ok := c.commands[args[0]]
+	if !ok {
+		return
+	}
+	if _, sub := cmd.search(args[1:]); sub != nil {
+		cmd = *sub
+	}
+	_c, ok := cmd.Commander.(Command)
+	if ok {
+	}
+	fmt.Fprintf(c.stdout, fmt.Sprintf(usage, os.Args[0], _c.subcommands(), cmd.flags(), os.Args[0]))
 }
 
 type Command struct {
@@ -98,85 +170,27 @@ func (c *Command) SetHelp(help string) {
 	c.help = help
 }
 
-var (
-	ErrNoCommand             = errors.New("No command provided")
-	ErrCommandNotImplemented = errors.New("Command not implemented")
-	ErrDisableHelp           = errors.New("Help command is disabled")
-)
-
-func (c *CommandManager) Run(ctx context.Context) error {
-	args := os.Args[1:]
-
-	if len(args) == 0 {
-		return ErrNoCommand
-	}
-
-	fmt.Println("args:", args)
-	if args[0] == "help" {
-		if !c.help {
-			return ErrDisableHelp
-		}
-		c.printHelp(args[1:])
-		return nil
-	}
-
-	cmd, ok := c.commands[args[0]]
-	if !ok {
-		return ErrCommandNotImplemented
-	}
-
-	pos, sub := cmd.search(args[1:])
-	if sub != nil {
-		cmd = *sub
-		pos += 1
-	}
-
-	f := flag.NewFlagSet(cmd.Name(), flag.ExitOnError)
-	cmd.SetFlags(f)
-
-	if err := f.Parse(args[pos:]); err != nil {
-		return err
-	}
-
-	if err := cmd.Run(ctx); err != nil {
-		return err
-	}
-
-	return nil
+func (c *Command) flags() string {
+	f := pflag.NewFlagSet(c.Name(), pflag.ExitOnError)
+	c.SetFlags(f)
+	buf := bytes.NewBuffer(nil)
+	f.SetOutput(buf)
+	f.PrintDefaults()
+	return buf.String()
 }
 
-const usage = `
-Usage: %s <command> [arguments]
-
-Subcommands:
-    %s
-
-Use "%s help <command>" for more information about a command.
-`
-
-func (c *CommandManager) printHelp(args []string) {
-	cmd, ok := c.commands[args[0]]
-	if !ok {
-		return
+func (c *Command) subcommands() string {
+	subcmds := "    "
+	sub := c.subCommands
+	keys := make([]string, 0, len(sub))
+	for k := range sub {
+		keys = append(keys, k)
 	}
-	_, sub := cmd.search(args[1:])
-	if sub != nil {
-		cmd = *sub
+	sort.Strings(keys)
+	for _, k := range keys {
+		subcmds += fmt.Sprintf("%s\n    ", sub[k].Name())
 	}
-	subCommands := ""
-	_c, ok := cmd.Commander.(Command)
-	if ok {
-		sub := _c.subCommands
-		keys := make([]string, 0, len(sub))
-		for k := range sub {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			subCommands += fmt.Sprintf("%s\n    ", sub[k].Name())
-		}
-	}
-	fmt.Fprintf(c.stdout, fmt.Sprintf(usage, os.Args[0], subCommands, "", os.Args[0]))
+	return subcmds
 }
 
 func (c *Command) search(args []string) (int, *Command) {
