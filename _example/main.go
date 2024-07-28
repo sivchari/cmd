@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 
 	"github.com/sivchari/commander"
+	"github.com/spf13/pflag"
 )
 
 func main() {
@@ -21,10 +21,11 @@ var _ commander.Commander = &PrintCommand{}
 
 type PrintCommand struct{}
 
-var name string
+var last *string
+var first *string
 
 func (p *PrintCommand) Run(ctx context.Context) error {
-	fmt.Printf("Hello, %s!\n", name)
+	fmt.Printf("Hello, %s %s!\n", *first, *last)
 	return nil
 }
 
@@ -40,8 +41,9 @@ func (p *PrintCommand) Long() string {
 	return "Prints Hello, World!"
 }
 
-func (p *PrintCommand) SetFlags(f *flag.FlagSet) {
-	f.StringVar(&name, "name", "World", "Name to print")
+func (p *PrintCommand) SetFlags(f *pflag.FlagSet) {
+	first = f.StringP("first", "f", "Hello", "Name to print")
+	last = f.StringP("last", "l", "World", "Name to print")
 }
 
 var _ commander.Commander = &SubCommand{}
@@ -67,7 +69,7 @@ func (s *SubCommand) Long() string {
 	return "Subcommand"
 }
 
-func (s *SubCommand) SetFlags(f *flag.FlagSet) {
+func (s *SubCommand) SetFlags(f *pflag.FlagSet) {
 	f.IntVar(&number, "number", 0, "Number to print")
 }
 
@@ -94,6 +96,6 @@ func (s *Sub2Command) Long() string {
 	return "Subcommand 2"
 }
 
-func (s *Sub2Command) SetFlags(f *flag.FlagSet) {
+func (s *Sub2Command) SetFlags(f *pflag.FlagSet) {
 	f.StringVar(&message, "message", "Hello, World!", "Message to print")
 }
