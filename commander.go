@@ -194,10 +194,10 @@ func (c *Command) subcommands() string {
 }
 
 func (c *Command) search(args []string) (int, *Command) {
-	var cmd *Command
 	var pos int
+	cmd := c
 	for _, arg := range args {
-		c, ok := c.Commander.(Command)
+		c, ok := cmd.Commander.(Command)
 		if !ok {
 			break
 		}

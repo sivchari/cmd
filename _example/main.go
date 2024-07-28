@@ -11,7 +11,9 @@ import (
 func main() {
 	cmd := commander.NewCommandManager().Build()
 	print := commander.NewCommand(&PrintCommand{})
-	print.Register(&SubCommand{})
+	sub := commander.NewCommand(&SubCommand{})
+	sub.Register(&SubSubCommand{})
+	print.Register(sub)
 	print.Register(&Sub2Command{})
 	cmd.Register(print)
 	cmd.Run(context.Background())
@@ -99,3 +101,26 @@ func (s *Sub2Command) Long() string {
 func (s *Sub2Command) SetFlags(f *pflag.FlagSet) {
 	f.StringVar(&message, "message", "Hello, World!", "Message to print")
 }
+
+var _ commander.Commander = &SubSubCommand{}
+
+type SubSubCommand struct{}
+
+func (s *SubSubCommand) Run(ctx context.Context) error {
+	fmt.Println("SubSubCommand")
+	return nil
+}
+
+func (s *SubSubCommand) Name() string {
+	return "subsub"
+}
+
+func (s *SubSubCommand) Short() string {
+	return "SubSubcommand"
+}
+
+func (s *SubSubCommand) Long() string {
+	return "SubSubcommand"
+}
+
+func (s *SubSubCommand) SetFlags(f *pflag.FlagSet) {}
