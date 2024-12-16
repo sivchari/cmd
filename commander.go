@@ -96,6 +96,10 @@ func (c *CommandManager) Run(ctx context.Context) error {
 		if !c.help {
 			return ErrDisableHelp
 		}
+		if len(args) == 1 {
+			fmt.Fprintf(c.stderr, "No command provided. Use 'help <command>' for more information about a command.\n")
+			return nil
+		}
 		c.printHelp(args[1:])
 		return nil
 	}
